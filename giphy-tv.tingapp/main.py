@@ -1,38 +1,59 @@
 import tingbot
 from tingbot import *
-import feedparser
 from urlparse import urlparse
 import os
+import json
 import urllib
+import string
+import hashlib
+import random
 
 
-imgur_rss_url = 'https://imgur.com/r/starwars/rss'
+giphy_tv_url = 'http://api.giphy.com/v1/gifs/random?api_key=dc6zaTOxFJmzC&tag=cats'
+
 state = {}
+channels = {'cats', 'dogs'}
+
+imageloaded = 99
 
 def filename_for_url(url):
-    return '/tmp/imgur-' + os.path.basename(urlparse(url).path)
+    m = hashlib.md5()
+    m.update(os.path.dirname(urlparse(url).path))
+    thishash = m.hexdigest()
+    return '/tmp/giphy-' + thishash + '_' + os.path.basename(urlparse(url).path)
 
 @every(minutes=10)
 def refresh_feed():
+    global imageloaded
     image_urls = []
-    d = feedparser.parse(imgur_rss_url)
     
-    for entry in d['entries']:
-        if entry.get('media_content'):
-            image_urls.append(entry['media_content'][0]['url'])
-        if len(image_urls) >= 10:
-            continue
-
+    for x in range(0, 3): 
+        response = urllib.urlopen(giphy_tv_url)
+        data = json.loads(response.read())
+    
+        for key, value in data.iteritems():
+            if key != 'data': 
+                continue
+            else:
+                image_urls.append(str(value['fixed_height_downsampled_url']))
+            
+    imageloaded = 0
     for image_url in image_urls:
         filename = filename_for_url(image_url)
-    
+        
         if not os.path.exists(filename):
             urllib.urlretrieve(image_url, filename)
+
+        imageloaded = imageloaded + 1
+        
+        screen.fill(color='red')
+        screen.text('Loading image ' + str(random.randint(0,199)) + str(imageloaded))
+
 
     state['image_urls'] = image_urls
     state['index'] = 0
 
-@every(seconds=10)
+@every(seconds=5)
 def next_image():
     if 'image_urls' not in state:
         return
@@ -51,6 +72,9 @@ def loop():
         screen.fill(color='black')
         screen.text('Loading...')
         return
+    else:
+        screen.fill(color='black')
+        screen.text('Done!')
     
     image = state['image']
     
